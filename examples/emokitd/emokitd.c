@@ -18,7 +18,7 @@ int main(int argc, char **argv)
   
 	d = emokit_create();
 	printf("Current epoc devices connected: %d\n", emokit_get_count(d, EMOKIT_VID, EMOKIT_PID));
-	int r = emokit_open(d, EMOKIT_VID, EMOKIT_PID, 0);
+	int r = emokit_open(d, EMOKIT_VID, EMOKIT_PID, 1);
 	if(r != 0)
 	{
 		printf("CANNOT CONNECT: %d\n", r);

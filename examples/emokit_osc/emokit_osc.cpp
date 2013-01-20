@@ -7,87 +7,74 @@
 #include <cstdlib>
 #include <csignal>
 #include <iostream>
-#include "oscpack/osc/OscOutboundPacketStream.h"
-#include "oscpack/ip/UdpSocket.h"
-#include "libepoc.h"
+#include "../../include/oscpack/osc/OscOutboundPacketStream.h"
+#include "../../include/oscpack/ip/UdpSocket.h"
+
+extern "C"
+{
+#include "emokit/emokit.h"
+}
+
 
 #define ADDRESS "127.0.0.1"
 #define PORT 9997
 
 #define OUTPUT_BUFFER_SIZE 4096
-
-void sigproc(int i)
+ 
+int main(int argc, char **argv)
 {
-	std::cout << "closing epoc and quitting" << std::endl;
-	exit(0);
-}
+ 
+	emokit_device* d;
+	d = emokit_create();
 
-int main(int argc, char* argv[])
-{
-	signal(SIGINT, sigproc);
-#ifndef WIN32
-	signal(SIGQUIT, sigproc);
-#endif
+	std::cout << "Current epoc devices connected " << emokit_get_count(d, EMOKIT_VID, EMOKIT_PID) << "\n";
+	if(emokit_open(d, EMOKIT_VID, EMOKIT_PID, 1) != 0)
+	{
+		std::cout << "CANNOT CONNECT\n";
+		return 1;
+	}
 
-    UdpTransmitSocket transmitSocket( IpEndpointName( ADDRESS, PORT ) );
-    
-    char buffer[OUTPUT_BUFFER_SIZE];
-
-
-	FILE *input;
-	FILE *output;
-	enum headset_type type;
-  
+	UdpTransmitSocket transmitSocket( IpEndpointName( ADDRESS, PORT ) );    
+	char buffer[OUTPUT_BUFFER_SIZE];
 	char raw_frame[32];
-	struct epoc_frame frame;
-	epoc_device* d;
-	uint8_t data[32];
-	if (argc < 2)
-	{
-		fputs("Missing argument\nExpected: epocd [consumer|research|special]\n", stderr);
-		return 1;
-	}
-  
-	if(strcmp(argv[1], "research") == 0)
-		type = RESEARCH_HEADSET;
-	else if(strcmp(argv[1], "consumer") == 0)
-		type = CONSUMER_HEADSET;
-	else if(strcmp(argv[1], "special") == 0)
-		type = SPECIAL_HEADSET;
-	else {
-		fputs("Bad headset type argument\nExpected: epocd [consumer|research|special] source [dest]\n", stderr);
-		return 1;
-	}
-  
-	epoc_init(type);
-
-	d = epoc_create();
-	printf("Current epoc devices connected: %d\n", epoc_get_count(d, EPOC_VID, EPOC_PID));
-	if(epoc_open(d, EPOC_VID, EPOC_PID, 0) != 0)
-	{
-		printf("CANNOT CONNECT\n");
-		return 1;
-	}
+	struct emokit_frame frame;
+	
+	std::cout << "Connected\n";
 	while(1)
 	{
-		if(epoc_read_data(d, data) > 0)
+		std::cout << "Starting read\n";
+		if(emokit_read_data(d) > 0)
 		{
-			epoc_get_next_frame(&frame, data);
+			struct emokit_frame c;
+			c = emokit_get_next_frame(d);
+			
 			osc::OutboundPacketStream p( buffer, OUTPUT_BUFFER_SIZE );
-			p << osc::BeginBundleImmediate
-			  << osc::BeginMessage( "/epoc/channels" )
-			  << frame.F3 << frame.FC6 << frame.P7 << frame.T8 << frame.F7 << frame.F8 << frame.T7 << frame.P8 << frame.AF4 << frame.F4 << frame.AF3 << frame.O2 << frame.O1 << frame.FC5 << osc::EndMessage
-			  << osc::BeginMessage( "/epoc/gyro" ) 
-			  << frame.gyroX << frame.gyroY << osc::EndMessage
-			  << osc::EndBundle;
-    
+			p << osc::BeginMessage( "/emokit/channels" )
+			  << c.F3 << c.FC6 << c.P7 << c.T8 << c.F7 << c.F8 
+			  << c.T7 << c.P8 << c.AF4 << c.F4 << c.AF3 << c.O2 
+			  << c.O1 << c.FC5 
+			  << osc::EndMessage;
 			transmitSocket.Send( p.Data(), p.Size() );
+			
+			osc::OutboundPacketStream q( buffer, OUTPUT_BUFFER_SIZE );
+			q << osc::BeginMessage( "/emokit/gyro" ) 
+			  << (int)frame.gyroX << (int)frame.gyroY << osc::EndMessage;
+			transmitSocket.Send( q.Data(), q.Size() );
+
+			osc::OutboundPacketStream info( buffer, OUTPUT_BUFFER_SIZE );
+			info << osc::BeginMessage( "/emokit/info" )
+				<< (int)c.battery
+				<< c.cq.F3 << c.cq.FC6 << c.cq.P7 << c.cq.T8 << c.cq.F7 << c.cq.F8
+				<< c.cq.T7 << c.cq.P8 << c.cq.AF4 << c.cq.F4 << c.cq.AF3 << c.cq.O2 
+				<< c.cq.O1 << c.cq.FC5
+				<< osc::EndMessage;
+			transmitSocket.Send( info.Data(), info.Size() );
+			
 		}
 	}
 
-	epoc_close(d);
-	epoc_delete(d);
+	fflush(stdout);
+	emokit_close(d);
+	emokit_delete(d);
 	return 0;
-
 }
-
