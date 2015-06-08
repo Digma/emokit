@@ -1,5 +1,11 @@
-Emokit
-======
+Summary
+=======
+
+Modified version by Gael Grosch for his bachelor project at EPFL (original can be found at openyou/emokit). The main contributions are some stability fixes and the adition of signal processing libraries.
+
+
+Original info on Emokit
+=======================
 
 Reverse engineering and original code written by
 
